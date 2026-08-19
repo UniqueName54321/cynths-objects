@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.3
+
+- Bugfix: lowered the Object Collab minimum version to `>=v0.5.5-beta.2` so it
+  resolves for everyone on the index (including users still on beta.2). Any
+  newer version (including beta.3) remains supported.
+
 ## v0.2.2
 
 - Bugfix: corrected the Object Collab dependency. Geode has no true "any
