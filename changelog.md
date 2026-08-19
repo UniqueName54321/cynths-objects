@@ -2,9 +2,11 @@
 
 ## v0.2.2
 
-- Bugfix: removed the Object Collab version pin. The dependency now uses `*`
-  (any version), so the mod always runs against whatever Object Collab is
-  installed rather than requiring a specific minimum version.
+- Bugfix: corrected the Object Collab dependency. Geode has no true "any
+  version" dependency — the index rejects the `*` wildcard during builds
+  (HTTP 400 "Bad compare string *") — so the mod depends on a
+  `>=v0.5.5-beta.3` minimum bound, which targets the latest release and
+  accepts all future updates.
 
 ## v0.2.1
 
