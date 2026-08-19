@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.2
+
+- Bugfix: removed the Object Collab version pin. The dependency now uses `*`
+  (any version), so the mod always runs against whatever Object Collab is
+  installed rather than requiring a specific minimum version.
+
 ## v0.2.1
 
 - Bugfix: confirmed the Object Collab dependency resolves to the latest
