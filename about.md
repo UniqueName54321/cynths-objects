@@ -5,9 +5,11 @@ Object Collab.
 
 ## Currently included
 
-- **VHS Overlay** — a full-screen VHS-style shader effect (scanlines, film
-  grain, vignette, color fringing and tracking lines). Place it in a level and
-  set its opacity from the **Edit Special** screen to control how strongly the
-  effect shows.
+- **VHS Shader** — a full-screen VHS-style shader *trigger*. Place it, trigger
+  it, and it fades a VHS effect (scanlines, film grain, chromatic fringing,
+  tracking bands and vignette) in over the whole screen, then fades out.
+  Opacity, fade in/out, hold time and every individual effect are all
+  adjustable from the **Edit Special** screen — just like a vanilla shader
+  trigger.
 
 More objects coming soon.

@@ -6,20 +6,22 @@ objects to the editor, built on top of
 
 ## Objects
 
-| Object       | Type       | Description |
-|--------------|------------|-------------|
-| VHS Overlay  | Decoration | A full-screen VHS-style shader overlay — scanlines, film grain, vignette, color fringing and tracking lines. Adjustable opacity via its "Edit Special" screen. |
-
-> Currently the pack only ships the **VHS Overlay** object. More to come.
+| Object      | Type    | Description |
+|-------------|---------|-------------|
+| VHS Shader  | Trigger | A full-screen VHS-style shader trigger — scanlines, film grain, chromatic fringing, tracking bands and vignette. Fades in/out and every effect is independently adjustable from its "Edit Special" screen. |
 
 ## Usage
 
-1. Place the **VHS Overlay** object anywhere in the level.
-2. Select it and open **Edit Special** (the wrench) to set the **Opacity**
-   (0 = invisible, 255 = fully opaque; default is 100).
-3. Play the level — a full-screen VHS effect renders over the whole scene.
+1. Place the **VHS Shader** trigger in the level.
+2. Select it and open **Edit Special** (the wrench). Use the touch/spawn/multi
+   trigger toggles to decide how it activates, then tweak each effect
+   (scanlines, grain, chromatic, tracking, vignette, speed) and the timing
+   (fade in/out, hold, opacity).
+3. Play the level — triggering it fades the VHS effect in over the whole
+   screen. It fades out after the **Hold** time (set **Hold** to `0` to keep it
+   on until level end), or early if a Stop trigger targets its group.
 
-> Only one overlay is shown at a time, even if you place multiple objects.
+> Only one VHS overlay is shown at a time, even if you place multiple triggers.
 
 ## Building
 
@@ -44,12 +46,12 @@ push (Windows, macOS, iOS, Android32, Android64) using the official
 [`geode-sdk/build-geode-mod`](https://github.com/geode-sdk/build-geode-mod)
 action and uploads the combined `.geode` as a build artifact.
 
-Pushing a `v*` tag (e.g. `v0.1.0`) also creates a **GitHub Release** with the
+Pushing a `v*` tag (e.g. `v0.2.0`) also creates a **GitHub Release** with the
 combined `.geode` attached:
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 > ⚠️ GitHub Actions is **disabled by default** on forks and may need to be
@@ -75,17 +77,15 @@ level is saved, it writes a small reference sheet so other players' Object
 Collab installs can rebind those IDs to their own environment — avoiding
 conflicts between different mod setups.
 
-### The VHS Overlay
+### The VHS Shader trigger
 
-The object is a normal custom object (a decoration), but it uses its
-`postPlayLayerInit()` hook to spawn a separate full-screen `CCSprite` onto the
-`PlayLayer`, scaled to the window size and rendered through a custom
-`CCGLProgram`. The shader only synthesizes the VHS effect (scanlines, grain,
-vignette, fringing, tracking bands) and relies on normal alpha blending to
-composite over the scene, so **opacity** maps directly to how strongly the
-effect shows. A `$modify` hook on `PlayLayer::onExit` clears the shared overlay
-pointer so it can't dangle between levels.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+The object is a custom **trigger** (an `EffectGameObject` with the `Modifier`
+game-object type, registered through Object Collab's `$object` macro). When the
+trigger fires (`triggerObject` / `triggerActivated`), it shows a shared,
+screen-sized `CCSprite` rendered through a custom `CCGLProgram`. The overlay
+drives its own fade-in / fade-out state machine from a scheduled per-frame
+`update()`, while `draw()` pushes the current time + effect parameters to the
+shader as uniforms — so the scanlines, grain, tracking bands and fringing all
+animate and stay independently adjustable. A `$modify` hook on
+`PlayLayer::onExit` clears the shared overlay pointer so it can't dangle
+between levels.
