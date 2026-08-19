@@ -1,0 +1,30 @@
+{
+    "geode": "5.9.0",
+    "gd": {
+        "win": "2.2081",
+        "android": "2.2081",
+        "mac": "2.2081",
+        "ios": "2.2081"
+    },
+    "id": "cynth.objects",
+    "name": "Cynth's Objects",
+    "version": "v0.1.0",
+    "developer": "Cynth",
+    "description": "A collection of custom objects built on Object Collab. Currently adds a VHS shader object.",
+    "tags": [
+        "content",
+        "editor",
+        "enhancement",
+        "customization"
+    ],
+    "dependencies": {
+        "smjs.object-collab": ">=v0.5.5-beta.3"
+    },
+    "resources": {
+        "spritesheets": {
+            "objects": [
+                "resources/*.png"
+            ]
+        }
+    }
+}

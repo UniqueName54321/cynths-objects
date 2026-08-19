@@ -1,0 +1,12 @@
+# Build output
+build/
+build-android*/
+
+# IDE
+.vscode/
+.idea/
+cmake-build-*/
+
+# OS
+.DS_Store
+Thumbs.db
