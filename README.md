@@ -6,11 +6,20 @@ objects to the editor, built on top of
 
 ## Objects
 
-| Object      | Type       | Description |
-|-------------|------------|-------------|
-| VHS Shader  | Decoration | Renders its sprite through a custom GLSL shader that applies a retro VHS look — chromatic aberration, scanlines, film grain and vignette. |
+| Object       | Type       | Description |
+|--------------|------------|-------------|
+| VHS Overlay  | Decoration | A full-screen VHS-style shader overlay — scanlines, film grain, vignette, color fringing and tracking lines. Adjustable opacity via its "Edit Special" screen. |
 
-> Currently the pack only ships the **VHS Shader** object. More to come.
+> Currently the pack only ships the **VHS Overlay** object. More to come.
+
+## Usage
+
+1. Place the **VHS Overlay** object anywhere in the level.
+2. Select it and open **Edit Special** (the wrench) to set the **Opacity**
+   (0 = invisible, 255 = fully opaque; default is 100).
+3. Play the level — a full-screen VHS effect renders over the whole scene.
+
+> Only one overlay is shown at a time, even if you place multiple objects.
 
 ## Building
 
@@ -47,17 +56,16 @@ level is saved, it writes a small reference sheet so other players' Object
 Collab installs can rebind those IDs to their own environment — avoiding
 conflicts between different mod setups.
 
-Adding an object looks like this:
+### The VHS Overlay
 
-```cpp
-ObjectAPI::registerObject(ObjectInfo::builder()
-    .id("my-object"_spr)
-    .sprite("my-object.png"_spr)
-    .construction(ComplexObject::builder()
-        .factory(MyObject::create)
-        .build())
-    .build());
-```
+The object is a normal custom object (a decoration), but it uses its
+`postPlayLayerInit()` hook to spawn a separate full-screen `CCSprite` onto the
+`PlayLayer`, scaled to the window size and rendered through a custom
+`CCGLProgram`. The shader only synthesizes the VHS effect (scanlines, grain,
+vignette, fringing, tracking bands) and relies on normal alpha blending to
+composite over the scene, so **opacity** maps directly to how strongly the
+effect shows. A `$modify` hook on `PlayLayer::onExit` clears the shared overlay
+pointer so it can't dangle between levels.
 
 ## License
 

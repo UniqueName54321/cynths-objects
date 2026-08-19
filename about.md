@@ -5,8 +5,9 @@ Object Collab.
 
 ## Currently included
 
-- **VHS Shader** — a decorative object rendered through a custom VHS-style
-  shader (chromatic aberration, scanlines, film grain and vignette). Place it
-  and scale it over your scene for a retro tape look.
+- **VHS Overlay** — a full-screen VHS-style shader effect (scanlines, film
+  grain, vignette, color fringing and tracking lines). Place it in a level and
+  set its opacity from the **Edit Special** screen to control how strongly the
+  effect shows.
 
 More objects coming soon.
