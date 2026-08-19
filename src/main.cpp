@@ -91,9 +91,9 @@ static cocos2d::CCGLProgram* vhsOverlayProgram() {
     static cocos2d::CCGLProgram* program = [] {
         auto* p = new cocos2d::CCGLProgram();
         p->initWithVertexShaderByteArray(VHS_OVERLAY_VERTEX, VHS_OVERLAY_FRAGMENT);
-        p->addAttribute(cocos2d::kCCAttributeNamePosition, cocos2d::kCCVertexAttrib_Position);
-        p->addAttribute(cocos2d::kCCAttributeNameColor, cocos2d::kCCVertexAttrib_Color);
-        p->addAttribute(cocos2d::kCCAttributeNameTexCoord, cocos2d::kCCVertexAttrib_TexCoords);
+        p->addAttribute(kCCAttributeNamePosition, kCCVertexAttrib_Position);
+        p->addAttribute(kCCAttributeNameColor, kCCVertexAttrib_Color);
+        p->addAttribute(kCCAttributeNameTexCoord, kCCVertexAttrib_TexCoords);
         p->link();
         p->updateUniforms();
         return p;
