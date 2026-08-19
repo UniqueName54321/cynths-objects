@@ -37,6 +37,17 @@ configured a CLI profile. See the
 [Geode docs](https://docs.geode-sdk.org/getting-started/create-mod/) for the
 full setup.
 
+### CI
+
+A [GitHub Actions workflow](.github/workflows/build.yml) builds the mod on every
+push (Windows, macOS, iOS, Android32, Android64) using the official
+[`geode-sdk/build-geode-mod`](https://github.com/geode-sdk/build-geode-mod)
+action and uploads the combined `.geode` as a build artifact.
+
+> ⚠️ GitHub Actions is **disabled by default** on forks and may need to be
+> enabled in the repo's **Actions** tab (and `Read and write permissions` under
+> **Settings → Actions → General** → Workflow permissions) before it runs.
+
 ## How it works
 
 ### Geode mods
