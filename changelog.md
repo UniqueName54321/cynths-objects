@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.1
+
+- Bugfix: confirmed the Object Collab dependency resolves to the latest
+  release (`v0.5.5-beta.3`). Geode dependencies use `>=` / `=` / `<=` version
+  ranges (there is no `latest` keyword), so `>=v0.5.5-beta.3` correctly targets
+  the newest Object Collab.
+
 ## v0.2.0
 
 - Reworked the VHS shader into a full-screen **shader trigger**, modeled after

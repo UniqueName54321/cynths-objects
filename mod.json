@@ -8,7 +8,7 @@
     },
     "id": "cynth.objects",
     "name": "Cynth's Objects",
-    "version": "v0.2.0",
+    "version": "v0.2.1",
     "developer": "Cynth",
     "description": "A collection of custom objects built on Object Collab. Currently adds a full-screen VHS shader trigger with fully adjustable effects.",
     "tags": [
