@@ -1,5 +1,61 @@
 # Changelog
 
+## v0.5.1
+
+- Replaced the numeric Option Key slider with a **searchable Option Browser**
+  popup in Edit Special.
+  - Search bar filters by name, category, or key number.
+  - Scrollable list of all 172 options.
+  - Each row shows `[*]` (instant) or `[!]` (needs respawn/restart).
+  - Clicking an option selects it and closes the browser.
+- Added a proper trigger-style icon (dark green gear, 64×64 PNG).
+- Removed the unused VHS sprite.
+- Fixed several compile errors against the real Object Collab / Geode APIs
+  (FLAlertLayer init signature, ScrollLayer content layer, NumericMenu input
+  types, custom button via `CustomValueMenu`).
+
+## v0.5.0
+
+- Expanded the Advanced Options Trigger from 41 to **172** options across 6
+  categories:
+  - **Level Settings** (0–15): platformer, mirror, rotate, two-player, reverse,
+    start mini/dual, start speed/mode, start pos, no time penalty, reset camera,
+    spawn group, target order/channel.
+  - **Gameplay** (30–56): practice, ignore damage, freeze player, audio, glitter,
+    particles, song trigger interval, section factors, progress height, etc.
+  - **Camera** (60–69): shake, offsets, zoom, height.
+  - **Physics** (80–91): all bugfixes.
+  - **Visual / Debug** (100–115): low detail, indicators, visualizer, hitbox,
+    debug draw, background/ground/font/middleground/color indices.
+  - **Player** (130–220): effects, particles, streak, animations, glow, controls,
+    movement, physics flags, slope handling, collision state, trajectory, ground
+    state, velocity.
+- Added value types: Bool, Speed, Mode, Int (0–100), Int999 (0–999), Float.
+- All player options apply to player 1.
+
+## v0.4.0
+
+- Replaced the VHS shader object with the **Advanced Options Trigger**.
+- The trigger changes one level setting to a specific value when activated,
+  configured through Edit Special (41 settings across gameplay, camera, physics,
+  and player state).
+
+## v0.3.3
+
+- Bugfix: fixed `CCRenderTexture` positioning and fragment shader opacity.
+
+## v0.3.2
+
+- Bugfix: fixed a GLSL `CC_MVPMatrix` redeclaration and added shader logs.
+
+## v0.3.1
+
+- Bugfix: added null-shader guards and a `CCSprite` diagnostic hook.
+
+## v0.3.0
+
+- Rewrote the VHS shader as true post-processing using `CCRenderTexture`.
+
 ## v0.2.3
 
 - Bugfix: lowered the Object Collab minimum version to `>=v0.5.5-beta.2` so it

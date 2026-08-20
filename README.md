@@ -6,22 +6,59 @@ objects to the editor, built on top of
 
 ## Objects
 
-| Object      | Type    | Description |
-|-------------|---------|-------------|
-| VHS Shader  | Trigger | A full-screen VHS-style shader trigger — scanlines, film grain, chromatic fringing, tracking bands and vignette. Fades in/out and every effect is independently adjustable from its "Edit Special" screen. |
+| Object                  | Type    | Description |
+|-------------------------|---------|-------------|
+| Advanced Options Trigger | Trigger | Changes a level or player setting on the fly. 172 options across 6 categories, with a searchable Option Browser in Edit Special. |
 
 ## Usage
 
-1. Place the **VHS Shader** trigger in the level.
+1. Place the **Advanced Options Trigger** in the level.
 2. Select it and open **Edit Special** (the wrench). Use the touch/spawn/multi
-   trigger toggles to decide how it activates, then tweak each effect
-   (scanlines, grain, chromatic, tracking, vignette, speed) and the timing
-   (fade in/out, hold, opacity).
-3. Play the level — triggering it fades the VHS effect in over the whole
-   screen. It fades out after the **Hold** time (set **Hold** to `0` to keep it
-   on until level end), or early if a Stop trigger targets its group.
+   trigger toggles to decide how it activates.
+3. Click **Browse Options...** to open the searchable browser, then type to
+   filter by name, category, or key number and click an option to select it.
+4. Set the **Value** slider to configure the chosen setting.
+5. Play the level — triggering it applies the setting to the current level
+   (or to player 1).
 
-> Only one VHS overlay is shown at a time, even if you place multiple triggers.
+Each trigger instance changes **one** setting to **one** value. Place multiple
+triggers to change several settings.
+
+### Option browser legend
+
+| Marker | Meaning |
+|--------|---------|
+| `[*]`  | Takes effect instantly |
+| `[!]`  | Needs a respawn/restart |
+
+## Options
+
+The trigger covers **172** options across 6 categories. Keys are the internal
+IDs shown in the browser (e.g. `#7`, `#150`).
+
+| Category        | Key range   | Count |
+|-----------------|-------------|-------|
+| Level Settings  | 0–15        | 16    |
+| Gameplay        | 30–56       | 27    |
+| Camera          | 60–69       | 10    |
+| Physics         | 80–91       | 12    |
+| Visual / Debug  | 100–115     | 16    |
+| Player          | 130–220     | 91    |
+| **Total**       |             | **172** |
+
+### Value types
+
+The **Value** slider maps differently depending on the chosen setting:
+
+- **Bool** — slider `0→0.5` = OFF, `0.5→1` = ON
+- **Speed** — `0`=Slow, `0.25`=Normal, `0.5`=Fast, `0.75`=Very Fast, `1`=Extreme
+- **Mode** — `0`=Cube, `0.14`=Ship, `0.29`=Ball, `0.43`=UFO, `0.57`=Wave,
+  `0.71`=Robot, `0.86`=Spider, `1`=Swing
+- **Int (0–100)** — slider maps to 0–100
+- **Int999 (0–999)** — slider maps to 0–999 (spawn group, target, icon request)
+- **Float** — slider maps to the setting's documented range
+
+All **Player** options apply to player 1.
 
 ## Building
 
@@ -46,12 +83,12 @@ push (Windows, macOS, iOS, Android32, Android64) using the official
 [`geode-sdk/build-geode-mod`](https://github.com/geode-sdk/build-geode-mod)
 action and uploads the combined `.geode` as a build artifact.
 
-Pushing a `v*` tag (e.g. `v0.2.0`) also creates a **GitHub Release** with the
+Pushing a `v*` tag (e.g. `v0.5.1`) also creates a **GitHub Release** with the
 combined `.geode` attached:
 
 ```sh
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.5.1
+git push origin v0.5.1
 ```
 
 > ⚠️ GitHub Actions is **disabled by default** on forks and may need to be
@@ -77,15 +114,18 @@ level is saved, it writes a small reference sheet so other players' Object
 Collab installs can rebind those IDs to their own environment — avoiding
 conflicts between different mod setups.
 
-### The VHS Shader trigger
+### The Advanced Options Trigger
 
 The object is a custom **trigger** (an `EffectGameObject` with the `Modifier`
-game-object type, registered through Object Collab's `$object` macro). When the
-trigger fires (`triggerObject` / `triggerActivated`), it shows a shared,
-screen-sized `CCSprite` rendered through a custom `CCGLProgram`. The overlay
-drives its own fade-in / fade-out state machine from a scheduled per-frame
-`update()`, while `draw()` pushes the current time + effect parameters to the
-shader as uniforms — so the scanlines, grain, tracking bands and fringing all
-animate and stay independently adjustable. A `$modify` hook on
-`PlayLayer::onExit` clears the shared overlay pointer so it can't dangle
-between levels.
+game-object type, registered through Object Collab's `$object` macro). Each
+instance stores two floats — the **option key** and the **value** — persisted as
+custom properties (`KEY_OPTION` / `KEY_VALUE`). When the trigger fires
+(`triggerObject` / `triggerActivated`), it looks up the setting, maps the slider
+value to the appropriate type (Bool / Speed / Mode / Int / Float), and applies
+it to `PlayLayer`, `LevelSettingsObject`, or `PlayerObject`.
+
+The **Edit Special** screen is defined with Object Collab's `PopupConfig`:
+a `CustomValueMenu` renders the **Browse Options...** button, and a
+`NumericMenu` slider edits the value. The browser itself is a standalone
+`FLAlertLayer` subclass with a `TextInput` search bar and a `ScrollLayer` list;
+selecting a row fires a callback that updates the trigger's option key.

@@ -5,7 +5,7 @@
 //
 // The "Advanced Options Trigger" lets level makers change any level or
 // player setting on the fly.  Each trigger instance changes ONE setting
-// to a specific value when activated.  220+ options across 6 categories.
+// to a specific value when activated.  172 options across 6 categories.
 // Edit Special now features a searchable Option Browser popup instead of
 // a numeric slider for choosing which setting to change.
 
@@ -1150,7 +1150,7 @@ public:
                 .description(
                     "Changes a level or player setting on the fly.\n\n"
                     "Click \"Browse Options\" to search and pick a "
-                    "setting from the full list of 220+ options.\n\n"
+                    "setting from the full list of 172 options.\n\n"
                     "VALUE slider: controls the setting value.\n"
                     "  Bool: 0->0.5=OFF, 0.5->1=ON\n"
                     "  Speed: 0=Slow, 0.25=Normal, 0.5=Fast, "
