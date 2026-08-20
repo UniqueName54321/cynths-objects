@@ -203,10 +203,18 @@ public:
                 overlay->m_renderTex->retain();
 
                 // ── Grab the display sprite & attach the VHS shader ───
+                auto* shader = vhsOverlayProgram();
+                if (!shader) {
+                    log::error("VHS: vhsOverlayProgram failed — "
+                               "shader compilation/linking error, "
+                               "overlay will not be created");
+                    delete overlay;
+                    return nullptr;
+                }
                 overlay->m_displaySprite = overlay->m_renderTex->getSprite();
-                overlay->m_displaySprite->setShaderProgram(vhsOverlayProgram());
-                overlay->m_displaySprite->setAnchorPoint({0.f, 0.f});
-                overlay->m_displaySprite->setPosition({0.f, 0.f});
+                overlay->m_displaySprite->setShaderProgram(shader);
+                overlay->m_displaySprite->setAnchorPoint({0.0f, 0.0f});
+                overlay->m_displaySprite->setPosition({0.0f, 0.0f});
 
                 // The render texture already owns the sprite as a child;
                 // add the render texture as *our* child.
@@ -289,18 +297,25 @@ public:
         m_renderTex->end();
         setVisible(true);
 
-        // ── Push shader uniforms ──────────────────────────────────────
+        // ── Guard: bail if the display sprite lost its shader ───────
         auto* program = m_displaySprite->getShaderProgram();
-        if (program) {
-            program->use();
-            program->setUniformsForBuiltins();
-            if (uScanlines  != -1) program->setUniformLocationWith1f(uScanlines,  scanlines);
-            if (uGrain      != -1) program->setUniformLocationWith1f(uGrain,      grain);
-            if (uChromatic  != -1) program->setUniformLocationWith1f(uChromatic,  chromatic);
-            if (uTracking   != -1) program->setUniformLocationWith1f(uTracking,   tracking);
-            if (uVignette   != -1) program->setUniformLocationWith1f(uVignette,   vignette);
-            if (uTime       != -1) program->setUniformLocationWith1f(uTime,       m_time * speed);
+        if (!program) {
+            log::error(
+                "VHS: display sprite has no shader program — "
+                "skipping post-process draw (sprite={})",
+                fmt::ptr(m_displaySprite));
+            return;
         }
+
+        // ── Push shader uniforms ──────────────────────────────────────
+        program->use();
+        program->setUniformsForBuiltins();
+        if (uScanlines  != -1) program->setUniformLocationWith1f(uScanlines,  scanlines);
+        if (uGrain      != -1) program->setUniformLocationWith1f(uGrain,      grain);
+        if (uChromatic  != -1) program->setUniformLocationWith1f(uChromatic,  chromatic);
+        if (uTracking   != -1) program->setUniformLocationWith1f(uTracking,   tracking);
+        if (uVignette   != -1) program->setUniformLocationWith1f(uVignette,   vignette);
+        if (uTime       != -1) program->setUniformLocationWith1f(uTime,       m_time * speed);
 
         // ── Draw the post-processed sprite ────────────────────────────
         // Calling visit() on the render-texture node visits its only
@@ -584,3 +599,32 @@ $on_mod(Loaded) {
         .editSpecial(VHSShaderTrigger::getEditSpecialConfig)
         .build());
 }
+
+// ---------------------------------------------------------------------------
+// Diagnostic hook — catches any CCSprite reaching draw() with no shader
+// ---------------------------------------------------------------------------
+//
+// This is instrumentation, not a fix.  When a sprite has a null shader
+// program, Cocos will crash inside CCSprite::draw() → CCGLProgram::use().
+// This hook logs the sprite's identity and returns cleanly instead, so we
+// can identify *which* sprite is broken — ours, Blur API's render-texture
+// sprite, or another mod entirely.
+//
+// Once the culprit is identified, this hook should be removed.
+
+#include <Geode/modify/CCSprite.hpp>
+
+class $modify(VHSCCSpriteHook, cocos2d::CCSprite) {
+    void draw() {
+        if (!getShaderProgram()) {
+            auto* parent = getParent();
+            log::error(
+                "[VHS DIAG] NULL shader — sprite={} id='{}' "
+                "parent={} parent-id='{}'",
+                fmt::ptr(this), getID(),
+                fmt::ptr(parent), parent ? parent->getID() : "<null>");
+            return;
+        }
+        CCSprite::draw();
+    }
+};
