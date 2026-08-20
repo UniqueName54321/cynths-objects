@@ -4,21 +4,24 @@
 // custom-object framework and cross-mod compatibility layer.
 //
 // The "Advanced Options Trigger" lets level makers change any level or
-// player setting on the fly.  Each trigger instance changes ONE setting
-// to a specific value when activated.  172 options across 6 categories.
-// Edit Special now features a searchable Option Browser popup instead of
-// a numeric slider for choosing which setting to change.
+// player setting on the fly. Each trigger instance can change multiple
+// settings when activated. 172 options are available across 6 categories.
+// Edit Object provides a searchable browser for enabling and configuring them.
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <functional>
+#include <map>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include <Geode/Geode.hpp>
 #include <Geode/ui/TextInput.hpp>
 #include <Geode/ui/ScrollLayer.hpp>
+#include <Geode/ui/SliderNode.hpp>
 #include <smjs.object-collab/include/object_collab.hpp>
 
 using namespace geode::prelude;
@@ -218,154 +221,6 @@ static const OptionEntry g_options[] = {
     {220, "Player: Correct Slope Dir",  true, "Player"},
 };
 
-static constexpr size_t kOptionCount = sizeof(g_options) / sizeof(g_options[0]);
-
-// ---------------------------------------------------------------------------
-// Option Browser Popup — searchable list of all options
-// ---------------------------------------------------------------------------
-
-class OptionBrowserPopup : public FLAlertLayer {
-protected:
-    std::function<void(int)> m_onSelected;
-    TextInput*              m_searchInput;
-    ScrollLayer*            m_scrollLayer;
-    CCMenu*                 m_listMenu;
-    std::vector<OptionEntry> m_filtered;
-    float                   m_btnHeight;
-
-    bool init(std::function<void(int)> onSelected) {
-        m_onSelected = std::move(onSelected);
-        m_searchInput = nullptr;
-        m_scrollLayer = nullptr;
-        m_listMenu = nullptr;
-        m_btnHeight = 24.0f;
-
-        auto winSize = CCDirector::sharedDirector()->getWinSize();
-        float w = 360.0f;
-        float h = 280.0f;
-
-        if (!FLAlertLayer::init(nullptr, "Choose Option", "", "OK", nullptr, w, false, h, 1.0f)) {
-            return false;
-        }
-
-        auto* bg = this->getChildByType<CCScale9Sprite>(0);
-        if (bg) bg->setContentSize({w, h});
-
-        // ── Search bar ────────────────────────────────────────────────
-        m_searchInput = TextInput::create(320.0f, "Search options...", "chatFont.fnt");
-        m_searchInput->setPosition({w / 2, h - 35.0f});
-        m_searchInput->setScale(0.6f);
-        m_searchInput->setCallback([this](const std::string& text) {
-            this->rebuildList(text);
-        });
-        this->addChild(m_searchInput);
-
-        // ── Scroll area ───────────────────────────────────────────────
-        CCSize listSize = {w - 20.0f, h - 90.0f};
-        m_scrollLayer = ScrollLayer::create({10.0f, 10.0f, listSize.width, listSize.height});
-        m_scrollLayer->setPosition({0, 0});
-        this->addChild(m_scrollLayer);
-
-        // ── Build initial list ────────────────────────────────────────
-        rebuildList("");
-
-        // ── OK button hidden (we select by clicking an option) ────────
-        // The FLAlertLayer OK button closes the popup; we want selection
-        // to close it.  We'll keep the OK button but make it close.
-        return true;
-    }
-
-    void rebuildList(const std::string& query) {
-        // Remove old menu
-        if (m_listMenu) {
-            m_listMenu->removeFromParent();
-            m_listMenu = nullptr;
-        }
-
-        // Filter
-        m_filtered.clear();
-        std::string q = query;
-        std::transform(q.begin(), q.end(), q.begin(), ::tolower);
-
-        for (size_t i = 0; i < kOptionCount; ++i) {
-            if (q.empty()) {
-                m_filtered.push_back(g_options[i]);
-            } else {
-                std::string name(g_options[i].name);
-                std::transform(name.begin(), name.end(), name.begin(), ::tolower);
-                std::string cat(g_options[i].category);
-                std::transform(cat.begin(), cat.end(), cat.begin(), ::tolower);
-                std::string keyStr = std::to_string(g_options[i].key);
-                if (name.find(q) != std::string::npos ||
-                    cat.find(q) != std::string::npos ||
-                    keyStr.find(q) != std::string::npos) {
-                    m_filtered.push_back(g_options[i]);
-                }
-            }
-        }
-
-        // Build menu items
-        float totalH = m_filtered.size() * m_btnHeight;
-        CCSize listSize = m_scrollLayer->getContentSize();
-        float contentW = listSize.width;
-
-        m_listMenu = CCMenu::create();
-        m_listMenu->setPosition({0, totalH});
-
-        for (size_t i = 0; i < m_filtered.size(); ++i) {
-            auto& entry = m_filtered[i];
-            float y = totalH - (i + 0.5f) * m_btnHeight;
-
-            // Build label: "[*] #123 - Category: Name"
-            char buf[256];
-            std::snprintf(buf, sizeof(buf), "[%s] #%d - %s: %s",
-                entry.instant ? "*" : "!",
-                entry.key,
-                entry.category,
-                entry.name);
-
-            auto* label = CCLabelBMFont::create(buf, "chatFont.fnt");
-            label->setScale(0.35f);
-            label->setAnchorPoint({0.0f, 0.5f});
-
-            auto* btn = CCMenuItemSpriteExtra::create(
-                label, nullptr, this, menu_selector(OptionBrowserPopup::onOptionSelected));
-            btn->setTag(static_cast<int>(i));
-            btn->setContentSize({contentW, m_btnHeight});
-            btn->setPosition({contentW / 2, y});
-            m_listMenu->addChild(btn);
-        }
-
-        m_scrollLayer->m_contentLayer->removeAllChildren();
-        m_listMenu->setContentSize({contentW, totalH});
-        m_scrollLayer->m_contentLayer->addChild(m_listMenu);
-        m_scrollLayer->setContentLayerSize({contentW, std::max(totalH, listSize.height)});
-    }
-
-    void onOptionSelected(CCObject* sender) {
-        int idx = sender->getTag();
-        if (idx >= 0 && idx < static_cast<int>(m_filtered.size())) {
-            if (m_onSelected) m_onSelected(m_filtered[idx].key);
-        }
-        this->keyBackClicked();
-    }
-
-    void keyBackClicked() override {
-        FLAlertLayer::keyBackClicked();
-    }
-
-public:
-    static OptionBrowserPopup* create(std::function<void(int)> onSelected) {
-        auto* p = new OptionBrowserPopup();
-        if (p && p->init(std::move(onSelected))) {
-            p->autorelease();
-            return p;
-        }
-        delete p;
-        return nullptr;
-    }
-};
-
 // ---------------------------------------------------------------------------
 // Advanced Options — enum, helpers, value mapping
 // ---------------------------------------------------------------------------
@@ -437,17 +292,6 @@ static const char* optionName(AdvancedOption opt) {
     for (auto& e : g_options) if (e.key == static_cast<int>(opt)) return e.name;
     return "???";
 }
-
-// Tiny helper: target for the "Browse..." button's CCMenuItem callback.
-// We define it before the trigger class so menu_selector works, but
-// implement onTap() after the full trigger definition is visible.
-struct PopupButtonHelper final : CCObject {
-    void onTap(CCObject* sender);
-    static PopupButtonHelper* shared() {
-        static PopupButtonHelper* inst = new PopupButtonHelper();
-        return inst; // lives for the process lifetime
-    }
-};
 
 enum class OptionType { Bool, Speed, Mode, Int, Float, Int999 };
 
@@ -545,6 +389,263 @@ static std::string formatValue(AdvancedOption opt, float slider) {
     return "???";
 }
 
+using OptionValues = std::map<int, float>;
+
+static bool isKnownOption(int key) {
+    return std::ranges::any_of(g_options, [key](const OptionEntry& entry) {
+        return entry.key == key;
+    });
+}
+
+static OptionValues decodeOptionValues(std::string_view encoded) {
+    OptionValues values;
+    if (encoded.empty() || encoded == "-") return values;
+
+    while (!encoded.empty()) {
+        const size_t end = encoded.find(';');
+        const std::string_view item = encoded.substr(0, end);
+        const size_t equals = item.find('=');
+
+        if (equals != std::string_view::npos) {
+            auto key = utils::numFromString<int>(item.substr(0, equals));
+            auto value = utils::numFromString<float>(item.substr(equals + 1));
+            if (key && value && isKnownOption(key.unwrap())) {
+                values[key.unwrap()] = std::clamp(value.unwrap(), 0.0f, 1.0f);
+            }
+        }
+
+        if (end == std::string_view::npos) break;
+        encoded.remove_prefix(end + 1);
+    }
+
+    return values;
+}
+
+static std::string encodeOptionValues(const OptionValues& values) {
+    if (values.empty()) return "-";
+
+    std::string encoded;
+    for (const auto& entry : g_options) {
+        auto value = values.find(entry.key);
+        if (value == values.end()) continue;
+
+        if (!encoded.empty()) encoded += ';';
+        encoded += std::to_string(entry.key);
+        encoded += '=';
+        encoded += utils::numToString(value->second);
+    }
+    return encoded;
+}
+
+static float optionStep(AdvancedOption opt) {
+    switch (optionType(opt)) {
+        case OptionType::Bool:   return 1.0f;
+        case OptionType::Speed:  return 0.25f;
+        case OptionType::Mode:   return 1.0f / 7.0f;
+        case OptionType::Int:    return 0.01f;
+        case OptionType::Int999: return 0.001f;
+        case OptionType::Float:  return 0.01f;
+    }
+    return 0.01f;
+}
+
+// Search, enable, and edit any number of settings without closing the popup.
+// Rows are attached directly to ScrollLayer's content layer; the previous
+// nested menu was culled as one off-screen node, leaving an empty list.
+class MultiOptionBrowserPopup : public Popup {
+protected:
+    std::function<void(const std::string&)> m_onChanged;
+    OptionValues m_values;
+    TextInput* m_searchInput = nullptr;
+    ScrollLayer* m_scrollLayer = nullptr;
+    CCLabelBMFont* m_optionLabel = nullptr;
+    CCLabelBMFont* m_valueLabel = nullptr;
+    CCMenuItemToggler* m_activeToggle = nullptr;
+    SliderNode* m_valueSlider = nullptr;
+    std::map<int, CCLabelBMFont*> m_rowLabels;
+    int m_selectedKey = 0;
+    bool m_updatingControls = false;
+
+    bool init(std::string encoded, std::function<void(const std::string&)> onChanged) {
+        if (!Popup::init(420.0f, 320.0f)) return false;
+
+        m_onChanged = std::move(onChanged);
+        m_values = decodeOptionValues(encoded);
+        if (!m_values.empty()) m_selectedKey = m_values.begin()->first;
+        this->setTitle("Browse Options");
+
+        m_searchInput = TextInput::create(360.0f, "Search by name, category, or key...");
+        m_searchInput->setPosition({m_size.width / 2.0f, 276.0f});
+        m_searchInput->setScale(0.65f);
+        m_searchInput->setCallback([this](const std::string& query) {
+            this->rebuildList(query);
+        });
+        m_mainLayer->addChild(m_searchInput);
+
+        m_optionLabel = CCLabelBMFont::create("", "bigFont.fnt");
+        m_optionLabel->setScale(0.38f);
+        m_optionLabel->setPosition({150.0f, 242.0f});
+        m_mainLayer->addChild(m_optionLabel);
+
+        auto* enabledLabel = CCLabelBMFont::create("Enabled", "bigFont.fnt");
+        enabledLabel->setScale(0.3f);
+        enabledLabel->setPosition({30.0f, 218.0f});
+        m_mainLayer->addChild(enabledLabel);
+
+        m_activeToggle = CCMenuItemExt::createTogglerWithStandardSprites(
+            0.55f, [this](CCMenuItemToggler* sender) {
+                const bool enabled = !sender->isToggled();
+                if (enabled) {
+                    m_values.try_emplace(m_selectedKey, m_valueSlider->getValue());
+                } else {
+                    m_values.erase(m_selectedKey);
+                }
+                this->persist();
+                this->updateRowLabel(m_selectedKey);
+            });
+        m_activeToggle->setPosition({69.0f, 218.0f});
+        m_buttonMenu->addChild(m_activeToggle);
+
+        m_valueSlider = SliderNode::create([this](SliderNode*, float value) {
+            if (m_updatingControls) return;
+            m_values[m_selectedKey] = value;
+            if (!m_activeToggle->isToggled()) m_activeToggle->toggle(true);
+            this->updateValueLabel();
+            this->updateRowLabel(m_selectedKey);
+            this->persist();
+        });
+        m_valueSlider->setMin(0.0f);
+        m_valueSlider->setMax(1.0f);
+        m_valueSlider->setScale(0.7f);
+        m_valueSlider->setPosition({245.0f, 218.0f});
+        m_mainLayer->addChild(m_valueSlider);
+
+        m_valueLabel = CCLabelBMFont::create("", "bigFont.fnt");
+        m_valueLabel->setScale(0.32f);
+        m_valueLabel->setPosition({370.0f, 218.0f});
+        m_mainLayer->addChild(m_valueLabel);
+
+        m_scrollLayer = ScrollLayer::create({390.0f, 185.0f});
+        m_scrollLayer->setPosition({15.0f, 18.0f});
+        m_scrollLayer->setTouchEnabled(true);
+        m_scrollLayer->m_contentLayer->setLayout(ScrollLayer::createDefaultListLayout(1.0f));
+        m_mainLayer->addChild(m_scrollLayer);
+
+        this->selectOption(m_selectedKey);
+        this->rebuildList("");
+        return true;
+    }
+
+    void persist() {
+        if (m_onChanged) m_onChanged(encodeOptionValues(m_values));
+    }
+
+    void selectOption(int key) {
+        const int previous = m_selectedKey;
+        m_selectedKey = key;
+        const auto opt = static_cast<AdvancedOption>(key);
+
+        m_updatingControls = true;
+        auto value = m_values.find(key);
+        const bool enabled = value != m_values.end();
+        const float sliderValue = enabled ? value->second : 1.0f;
+        m_activeToggle->toggle(enabled);
+        m_valueSlider->setSnapStep(optionStep(opt));
+        m_valueSlider->setValue(sliderValue);
+        m_updatingControls = false;
+
+        m_optionLabel->setString(optionName(opt));
+        this->updateValueLabel();
+        this->updateRowLabel(previous);
+        this->updateRowLabel(key);
+    }
+
+    void updateValueLabel() {
+        const auto opt = static_cast<AdvancedOption>(m_selectedKey);
+        m_valueLabel->setString(formatValue(opt, m_valueSlider->getValue()).c_str());
+    }
+
+    void updateRowLabel(int key) {
+        auto labelIt = m_rowLabels.find(key);
+        if (labelIt == m_rowLabels.end()) return;
+
+        const OptionEntry* found = nullptr;
+        for (const auto& entry : g_options) {
+            if (entry.key == key) {
+                found = &entry;
+                break;
+            }
+        }
+        if (!found) return;
+
+        const bool enabled = m_values.contains(key);
+        labelIt->second->setString(fmt::format("[{}][{}] #{} - {}: {}",
+            enabled ? "x" : " ", found->instant ? "*" : "!",
+            found->key, found->category, found->name).c_str());
+        labelIt->second->setColor(key == m_selectedKey
+            ? ccColor3B{255, 255, 120}
+            : enabled ? ccColor3B{120, 255, 120} : ccColor3B{255, 255, 255});
+    }
+
+    void rebuildList(const std::string& query) {
+        m_scrollLayer->m_contentLayer->removeAllChildren();
+        m_rowLabels.clear();
+
+        std::string lowered = query;
+        std::ranges::transform(lowered, lowered.begin(), [](unsigned char ch) {
+            return static_cast<char>(std::tolower(ch));
+        });
+
+        const int priority = m_scrollLayer->getTouchPriority() - 1;
+        for (const auto& entry : g_options) {
+            std::string haystack = fmt::format("{} {} {}", entry.name, entry.category, entry.key);
+            std::ranges::transform(haystack, haystack.begin(), [](unsigned char ch) {
+                return static_cast<char>(std::tolower(ch));
+            });
+            if (!lowered.empty() && !haystack.contains(lowered)) continue;
+
+            auto* row = CCNode::create();
+            row->setContentSize({385.0f, 22.0f});
+            auto* label = CCLabelBMFont::create("", "chatFont.fnt");
+            label->setScale(0.35f);
+            label->setAnchorPoint({0.0f, 0.5f});
+            label->setPosition({5.0f, 11.0f});
+            row->addChild(label);
+
+            auto* button = CCMenuItemExt::createSpriteExtra(row,
+                [this, key = entry.key](CCMenuItemSpriteExtra*) {
+                    this->selectOption(key);
+                });
+            auto* menu = CCMenu::create();
+            menu->setPosition({0.0f, 0.0f});
+            menu->setContentSize(row->getContentSize());
+            menu->setTouchPriority(priority);
+            button->setPosition({row->getContentWidth() / 2.0f, row->getContentHeight() / 2.0f});
+            menu->addChild(button);
+
+            m_rowLabels[entry.key] = label;
+            m_scrollLayer->m_contentLayer->addChild(menu);
+            this->updateRowLabel(entry.key);
+        }
+
+        m_scrollLayer->m_contentLayer->updateLayout();
+        m_scrollLayer->moveToTop();
+    }
+
+public:
+    static MultiOptionBrowserPopup* create(
+        std::string encoded,
+        std::function<void(const std::string&)> onChanged) {
+        auto* popup = new MultiOptionBrowserPopup();
+        if (popup && popup->init(std::move(encoded), std::move(onChanged))) {
+            popup->autorelease();
+            return popup;
+        }
+        delete popup;
+        return nullptr;
+    }
+};
+
 // ---------------------------------------------------------------------------
 // The trigger object
 // ---------------------------------------------------------------------------
@@ -553,9 +654,11 @@ class $object(AdvancedOptionsTrigger, EffectGameObject) {
 public:
     static constexpr size_t KEY_OPTION = 150;
     static constexpr size_t KEY_VALUE  = 151;
+    static constexpr size_t KEY_OPTIONS = 152;
 
     float m_option = 0.0f;
     float m_value  = 1.0f;
+    std::string m_options;
 
     static AdvancedOptionsTrigger* create(ObjectInfo* info) {
         return new AdvancedOptionsTrigger(info);
@@ -569,12 +672,12 @@ public:
 
     void triggerObject(GJBaseGameLayer* layer, int uniqueID,
                        const gd::vector<int>* remapKeys) override {
-        applyOption();
+        applyOptions();
         CustomObject::triggerObject(layer, uniqueID, remapKeys);
     }
 
     void triggerActivated(float spawnXPosition) override {
-        applyOption();
+        applyOptions();
         CustomObject::triggerActivated(spawnXPosition);
     }
 
@@ -582,23 +685,38 @@ public:
         this->setTriggerText("ADV OPT");
     }
 
-    void setOptionKey(int key) {
-        m_option = static_cast<float>(key);
+    std::string getOptionsForEditor() const {
+        if (!m_options.empty()) return m_options;
+
+        OptionValues legacy;
+        const int key = static_cast<int>(m_option);
+        if (isKnownOption(key)) legacy[key] = std::clamp(m_value, 0.0f, 1.0f);
+        return encodeOptionValues(legacy);
     }
 
     // ── Apply the option ──────────────────────────────────────────────
 
-    void applyOption() {
+    void applyOptions() {
+        if (m_options.empty()) {
+            applyOption(static_cast<AdvancedOption>(static_cast<int>(m_option)), m_value);
+            return;
+        }
+
+        for (const auto& [key, value] : decodeOptionValues(m_options)) {
+            applyOption(static_cast<AdvancedOption>(key), value);
+        }
+    }
+
+    void applyOption(AdvancedOption opt, float sliderValue) {
         auto* pl = PlayLayer::get();
         if (!pl) { log::warn("[AdvOpt] No PlayLayer"); return; }
 
         auto* settings = pl->m_levelSettings;
-        AdvancedOption opt = static_cast<AdvancedOption>(static_cast<int>(m_option));
-        float raw = mapValueToFloat(opt, m_value);
+        float raw = mapValueToFloat(opt, sliderValue);
         bool  b   = (raw > 0.5f);
         int   i   = static_cast<int>(raw);
 
-        log::info("[AdvOpt] {} = {}", optionName(opt), formatValue(opt, m_value));
+        log::info("[AdvOpt] {} = {}", optionName(opt), formatValue(opt, sliderValue));
 
         switch (opt) {
             // ── Level Settings ────────────────────────────────────────
@@ -1138,20 +1256,19 @@ public:
         if (pl->m_player1) fn(pl->m_player1);
     }
 
-    // ── Edit Special ──────────────────────────────────────────────────
+    // ── Edit Object ───────────────────────────────────────────────────
 
-    static PopupOptions getEditSpecialConfig(const Selected& selected) {
+    static PopupOptions getEditObjectConfig(const Selected& selected) {
         return PopupConfig::builder()
             .width(380)
-            .height(180)
+            .height(150)
             .title("Advanced Options")
             .info(InfoPopup::builder()
                 .title("Advanced Options Trigger")
                 .description(
                     "Changes a level or player setting on the fly.\n\n"
-                    "Click \"Browse Options\" to search and pick a "
-                    "setting from the full list of 172 options.\n\n"
-                    "VALUE slider: controls the setting value.\n"
+                    "Open \"Browse Options\" to search, enable, disable, "
+                    "and set values for any number of the 172 settings.\n\n"
                     "  Bool: 0->0.5=OFF, 0.5->1=ON\n"
                     "  Speed: 0=Slow, 0.25=Normal, 0.5=Fast, "
                     "0.75=Very Fast, 1=Extreme\n"
@@ -1163,17 +1280,19 @@ public:
                 .build())
             .triggerToggles(true)
             .menu(browseButton())
-            .menu(slider("value"_spr, "Value", 0.f, 1.f, 0.01f,
-                         &AdvancedOptionsTrigger::m_value))
             .build();
     }
 
     std::vector<std::string> getObjectDetails() override {
-        AdvancedOption opt = static_cast<AdvancedOption>(static_cast<int>(m_option));
-        return DetailsBuilder::builder()
-            .field("Setting", optionName(opt))
-            .field("Value",   formatValue(opt, m_value))
-            .build();
+        const OptionValues values = decodeOptionValues(getOptionsForEditor());
+        std::vector<std::string> details;
+        details.reserve(values.size() + 1);
+        details.push_back(fmt::format("Settings: {}", values.size()));
+        for (const auto& [key, value] : values) {
+            const auto opt = static_cast<AdvancedOption>(key);
+            details.push_back(fmt::format("{}: {}", optionName(opt), formatValue(opt, value)));
+        }
+        return details;
     }
 
 private:
@@ -1182,71 +1301,42 @@ private:
     static std::unique_ptr<CustomValueMenu> browseButton() {
         return CustomValueMenu::builder()
             .id("browse")
-            .title("Option")
+            .title("Options")
             .factory([](const Selected& selected, geode::Popup* popup) -> CCMenu* {
                 auto* menu = CCMenu::create();
+                menu->setPosition({0.0f, 0.0f});
+                menu->setContentSize({300.0f, 34.0f});
 
-                AdvancedOptionsTrigger* trigger = nullptr;
-                for (auto* obj : selected) {
-                    if (auto* t = dynamic_cast<AdvancedOptionsTrigger*>(obj)) {
-                        trigger = t;
-                        break;
-                    }
-                }
-
-                auto* label = CCLabelBMFont::create("Browse Options...", "bigFont.fnt");
-                label->setScale(0.5f);
-
-                auto* btn = CCMenuItemSpriteExtra::create(
-                    label,
-                    nullptr,
-                    PopupButtonHelper::shared(),
-                    menu_selector(PopupButtonHelper::onTap));
-                btn->setUserObject(trigger);
-                btn->setContentSize({300.0f, 30.0f});
+                const Selected selectedCopy = selected;
+                auto* sprite = ButtonSprite::create(
+                    "Browse Options...", 280, true,
+                    "bigFont.fnt", "GJ_button_01.png", 32.0f, 0.65f);
+                auto* btn = CCMenuItemExt::createSpriteExtra(sprite,
+                    [selectedCopy](CCMenuItemSpriteExtra*) {
+                        AdvancedOptionsTrigger* current = nullptr;
+                        for (auto* obj : selectedCopy) {
+                            if (auto* candidate = dynamic_cast<AdvancedOptionsTrigger*>(obj)) {
+                                current = candidate;
+                                break;
+                            }
+                        }
+                        const std::string initial = current
+                            ? current->getOptionsForEditor() : "-";
+                        auto* browser = MultiOptionBrowserPopup::create(initial,
+                            [selectedCopy](const std::string& encoded) {
+                                applyValueToSelected(selectedCopy,
+                                    &AdvancedOptionsTrigger::m_options, encoded);
+                            });
+                        if (browser) browser->show();
+                    });
+                btn->setPosition({150.0f, 17.0f});
 
                 menu->addChild(btn);
-                menu->setContentSize({300.0f, 30.0f});
                 return menu;
             })
             .build();
     }
-
-    template <typename T>
-    static std::unique_ptr<NumericMenu> slider(
-        std::string id, std::string title,
-        float min, float max, float step, float T::* member) {
-        return NumericMenu::builder()
-            .id(std::move(id))
-            .title(std::move(title))
-            .inputType(NumericMenu::InputType::Slider)
-            .min(min)
-            .max(max)
-            .stepSize(step)
-            .precision(2)
-            .onValue([member](const float value, const Selected& selected,
-                              Popup* popup) {
-                applyValueToSelected(selected, member, value);
-            })
-            .currentValue([member](const Selected& selected, Popup* popup) {
-                return getCommonValueOrDefault(selected, member);
-            })
-            .build();
-    }
 };
-
-// ── PopupButtonHelper::onTap (implemented after the trigger class) ────
-
-void PopupButtonHelper::onTap(CCObject* sender) {
-    auto* btn = static_cast<CCMenuItemSpriteExtra*>(sender);
-    auto* trigger = static_cast<AdvancedOptionsTrigger*>(btn->getUserObject());
-    if (!trigger) return;
-
-    auto* browser = OptionBrowserPopup::create([trigger](int key) {
-        trigger->setOptionKey(key);
-    });
-    if (browser) browser->show();
-}
 
 // ── Registration ──────────────────────────────────────────────────────
 
@@ -1261,8 +1351,9 @@ $on_mod(Loaded) {
             .customProperties({
                 PropertyInterface::from(AdvancedOptionsTrigger::KEY_OPTION, &AdvancedOptionsTrigger::m_option, 0.0f),
                 PropertyInterface::from(AdvancedOptionsTrigger::KEY_VALUE,  &AdvancedOptionsTrigger::m_value,  1.0f),
+                PropertyInterface::from(AdvancedOptionsTrigger::KEY_OPTIONS, &AdvancedOptionsTrigger::m_options, ""),
             })
             .build())
-        .editSpecial(AdvancedOptionsTrigger::getEditSpecialConfig)
+        .editObject(AdvancedOptionsTrigger::getEditObjectConfig)
         .build());
 }

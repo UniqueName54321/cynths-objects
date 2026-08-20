@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.5.2
+
+- Fixed the **Browse Options...** button so it opens reliably.
+- Fixed the option list rendering blank when the browser opens.
+- Added value editing and enable/disable controls to the Option Browser.
+  - A single Advanced Options Trigger can now change multiple settings at once.
+  - Selecting another row keeps the browser open, making multi-setting setup fast.
+  - Existing v0.5.1 single-setting triggers are migrated when first edited and
+    remain compatible at runtime.
+- Removed the redundant **Value** slider from the main trigger menu.
+- Moved the trigger configuration from **Edit Special** to **Edit Object**,
+  matching the behavior of most vanilla Geometry Dash triggers.
+
 ## v0.5.1
 
 - Replaced the numeric Option Key slider with a **searchable Option Browser**

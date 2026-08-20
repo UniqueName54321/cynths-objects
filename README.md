@@ -8,21 +8,21 @@ objects to the editor, built on top of
 
 | Object                  | Type    | Description |
 |-------------------------|---------|-------------|
-| Advanced Options Trigger | Trigger | Changes a level or player setting on the fly. 172 options across 6 categories, with a searchable Option Browser in Edit Special. |
+| Advanced Options Trigger | Trigger | Changes one or more level/player settings at once. Includes 172 options across 6 categories and a searchable browser in Edit Object. |
 
 ## Usage
 
 1. Place the **Advanced Options Trigger** in the level.
-2. Select it and open **Edit Special** (the wrench). Use the touch/spawn/multi
+2. Select it and open **Edit Object**. Use the touch/spawn/multi
    trigger toggles to decide how it activates.
 3. Click **Browse Options...** to open the searchable browser, then type to
-   filter by name, category, or key number and click an option to select it.
-4. Set the **Value** slider to configure the chosen setting.
+   filter by name, category, or key number.
+4. Select a row, enable it, and set its value in the browser. Repeat for every
+   setting the trigger should change; the browser stays open between rows.
 5. Play the level — triggering it applies the setting to the current level
    (or to player 1).
 
-Each trigger instance changes **one** setting to **one** value. Place multiple
-triggers to change several settings.
+Each trigger instance can change **multiple settings** in one activation.
 
 ### Option browser legend
 
@@ -83,12 +83,12 @@ push (Windows, macOS, iOS, Android32, Android64) using the official
 [`geode-sdk/build-geode-mod`](https://github.com/geode-sdk/build-geode-mod)
 action and uploads the combined `.geode` as a build artifact.
 
-Pushing a `v*` tag (e.g. `v0.5.1`) also creates a **GitHub Release** with the
+Pushing a `v*` tag (e.g. `v0.5.2`) also creates a **GitHub Release** with the
 combined `.geode` attached:
 
 ```sh
-git tag v0.5.1
-git push origin v0.5.1
+git tag v0.5.2
+git push origin v0.5.2
 ```
 
 > ⚠️ GitHub Actions is **disabled by default** on forks and may need to be
@@ -118,14 +118,14 @@ conflicts between different mod setups.
 
 The object is a custom **trigger** (an `EffectGameObject` with the `Modifier`
 game-object type, registered through Object Collab's `$object` macro). Each
-instance stores two floats — the **option key** and the **value** — persisted as
-custom properties (`KEY_OPTION` / `KEY_VALUE`). When the trigger fires
-(`triggerObject` / `triggerActivated`), it looks up the setting, maps the slider
-value to the appropriate type (Bool / Speed / Mode / Int / Float), and applies
-it to `PlayLayer`, `LevelSettingsObject`, or `PlayerObject`.
+instance stores a sparse list of enabled option/value pairs as a custom
+property. The legacy **option key** and **value** properties remain readable so
+levels made with v0.5.1 continue to work. When the trigger fires (`triggerObject`
+/ `triggerActivated`), it maps each enabled value to the appropriate type (Bool
+/ Speed / Mode / Int / Float) and applies it to `PlayLayer`,
+`LevelSettingsObject`, or `PlayerObject`.
 
-The **Edit Special** screen is defined with Object Collab's `PopupConfig`:
-a `CustomValueMenu` renders the **Browse Options...** button, and a
-`NumericMenu` slider edits the value. The browser itself is a standalone
-`FLAlertLayer` subclass with a `TextInput` search bar and a `ScrollLayer` list;
-selecting a row fires a callback that updates the trigger's option key.
+The **Edit Object** screen is defined with Object Collab's `PopupConfig`. A
+`CustomValueMenu` renders the **Browse Options...** button. The browser uses a
+`TextInput`, a `ScrollLayer`, and value controls to search, enable, disable, and
+configure several settings without closing the popup.
