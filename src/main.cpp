@@ -10,7 +10,10 @@
 // a numeric slider for choosing which setting to change.
 
 #include <algorithm>
+#include <cstdio>
+#include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <Geode/Geode.hpp>
@@ -20,16 +23,6 @@
 
 using namespace geode::prelude;
 using namespace object_collab::prelude;
-
-// ---------------------------------------------------------------------------
-// Utility: create a simple sprite button label
-// ---------------------------------------------------------------------------
-
-static CCLabelBMFont* makeLabel(const char* text, float scale = 0.5f) {
-    auto* lbl = CCLabelBMFont::create(text, "goldFont.fnt");
-    lbl->setScale(scale);
-    return lbl;
-}
 
 // ---------------------------------------------------------------------------
 // Option entry — one row in the option browser
@@ -227,31 +220,31 @@ static const OptionEntry g_options[] = {
 
 static constexpr size_t kOptionCount = sizeof(g_options) / sizeof(g_options[0]);
 
-// Forward declare the trigger class for the popup callback.
-class AdvancedOptionsTrigger;
-
 // ---------------------------------------------------------------------------
 // Option Browser Popup — searchable list of all options
 // ---------------------------------------------------------------------------
 
 class OptionBrowserPopup : public FLAlertLayer {
 protected:
-    AdvancedOptionsTrigger* m_trigger;
+    std::function<void(int)> m_onSelected;
     TextInput*              m_searchInput;
     ScrollLayer*            m_scrollLayer;
     CCMenu*                 m_listMenu;
     std::vector<OptionEntry> m_filtered;
     float                   m_btnHeight;
 
-    bool init(AdvancedOptionsTrigger* trigger) {
-        m_trigger = trigger;
+    bool init(std::function<void(int)> onSelected) {
+        m_onSelected = std::move(onSelected);
+        m_searchInput = nullptr;
+        m_scrollLayer = nullptr;
+        m_listMenu = nullptr;
         m_btnHeight = 24.0f;
 
         auto winSize = CCDirector::sharedDirector()->getWinSize();
         float w = 360.0f;
         float h = 280.0f;
 
-        if (!FLAlertLayer::init(nullptr, "Choose Option", "OK", nullptr, w, false, h, 1, 1)) {
+        if (!FLAlertLayer::init(nullptr, "Choose Option", "", "OK", nullptr, w, false, h, 1.0f)) {
             return false;
         }
 
@@ -336,24 +329,23 @@ protected:
             label->setAnchorPoint({0.0f, 0.5f});
 
             auto* btn = CCMenuItemSpriteExtra::create(
-                label, this, menu_selector(OptionBrowserPopup::onOptionSelected));
+                label, nullptr, this, menu_selector(OptionBrowserPopup::onOptionSelected));
             btn->setTag(static_cast<int>(i));
             btn->setContentSize({contentW, m_btnHeight});
             btn->setPosition({contentW / 2, y});
             m_listMenu->addChild(btn);
         }
 
-        m_scrollLayer->removeAllChildren();
+        m_scrollLayer->m_contentLayer->removeAllChildren();
         m_listMenu->setContentSize({contentW, totalH});
-        m_scrollLayer->addChild(m_listMenu);
-        m_scrollLayer->setContentSize({contentW, std::max(totalH, listSize.height)});
-        m_scrollLayer->m_scrollLayer->setContentSize({contentW, totalH});
+        m_scrollLayer->m_contentLayer->addChild(m_listMenu);
+        m_scrollLayer->setContentLayerSize({contentW, std::max(totalH, listSize.height)});
     }
 
     void onOptionSelected(CCObject* sender) {
         int idx = sender->getTag();
         if (idx >= 0 && idx < static_cast<int>(m_filtered.size())) {
-            m_trigger->setOptionKey(m_filtered[idx].key);
+            if (m_onSelected) m_onSelected(m_filtered[idx].key);
         }
         this->keyBackClicked();
     }
@@ -363,9 +355,9 @@ protected:
     }
 
 public:
-    static OptionBrowserPopup* create(AdvancedOptionsTrigger* trigger) {
+    static OptionBrowserPopup* create(std::function<void(int)> onSelected) {
         auto* p = new OptionBrowserPopup();
-        if (p && p->init(trigger)) {
+        if (p && p->init(std::move(onSelected))) {
             p->autorelease();
             return p;
         }
@@ -445,6 +437,17 @@ static const char* optionName(AdvancedOption opt) {
     for (auto& e : g_options) if (e.key == static_cast<int>(opt)) return e.name;
     return "???";
 }
+
+// Tiny helper: target for the "Browse..." button's CCMenuItem callback.
+// We define it before the trigger class so menu_selector works, but
+// implement onTap() after the full trigger definition is visible.
+struct PopupButtonHelper final : CCObject {
+    void onTap(CCObject* sender);
+    static PopupButtonHelper* shared() {
+        static PopupButtonHelper* inst = new PopupButtonHelper();
+        return inst; // lives for the process lifetime
+    }
+};
 
 enum class OptionType { Bool, Speed, Mode, Int, Float, Int999 };
 
@@ -1159,7 +1162,7 @@ public:
                     "[*] = instant   [!] = needs respawn/restart")
                 .build())
             .triggerToggles(true)
-            .menu(browseButton("browse"_spr))
+            .menu(browseButton())
             .menu(slider("value"_spr, "Value", 0.f, 1.f, 0.01f,
                          &AdvancedOptionsTrigger::m_value))
             .build();
@@ -1176,32 +1179,35 @@ public:
 private:
     // ── "Browse Options" button ───────────────────────────────────────
 
-    static std::unique_ptr<NumericMenu> browseButton(std::string id) {
-        // We cheat by using a NumericMenu with a button-like behavior.
-        // The button opens the OptionBrowserPopup.
-        return NumericMenu::builder()
-            .id(std::move(id))
-            .title("Choose Option")
-            .inputType(NumericMenu::InputType::Button)
-            .onButton("Browse...", [](const Selected& selected, Popup* popup) {
-                // Get the trigger from the selection
-                auto triggers = selected.getObjects<AdvancedOptionsTrigger>();
-                if (!triggers.empty()) {
-                    auto* browser = OptionBrowserPopup::create(triggers[0]);
-                    if (browser) {
-                        browser->show();
+    static std::unique_ptr<CustomValueMenu> browseButton() {
+        return CustomValueMenu::builder()
+            .id("browse")
+            .title("Option")
+            .factory([](const Selected& selected, geode::Popup* popup) -> CCMenu* {
+                auto* menu = CCMenu::create();
+
+                AdvancedOptionsTrigger* trigger = nullptr;
+                for (auto* obj : selected) {
+                    if (auto* t = dynamic_cast<AdvancedOptionsTrigger*>(obj)) {
+                        trigger = t;
+                        break;
                     }
                 }
-            })
-            .currentValue([](const Selected& selected, Popup* popup) {
-                auto triggers = selected.getObjects<AdvancedOptionsTrigger>();
-                if (!triggers.empty()) {
-                    auto* t = triggers[0];
-                    AdvancedOption opt = static_cast<AdvancedOption>(
-                        static_cast<int>(t->m_option));
-                    return static_cast<float>(static_cast<int>(opt));
-                }
-                return 0.0f;
+
+                auto* label = CCLabelBMFont::create("Browse Options...", "bigFont.fnt");
+                label->setScale(0.5f);
+
+                auto* btn = CCMenuItemSpriteExtra::create(
+                    label,
+                    nullptr,
+                    PopupButtonHelper::shared(),
+                    menu_selector(PopupButtonHelper::onTap));
+                btn->setUserObject(trigger);
+                btn->setContentSize({300.0f, 30.0f});
+
+                menu->addChild(btn);
+                menu->setContentSize({300.0f, 30.0f});
+                return menu;
             })
             .build();
     }
@@ -1228,6 +1234,19 @@ private:
             .build();
     }
 };
+
+// ── PopupButtonHelper::onTap (implemented after the trigger class) ────
+
+void PopupButtonHelper::onTap(CCObject* sender) {
+    auto* btn = static_cast<CCMenuItemSpriteExtra*>(sender);
+    auto* trigger = static_cast<AdvancedOptionsTrigger*>(btn->getUserObject());
+    if (!trigger) return;
+
+    auto* browser = OptionBrowserPopup::create([trigger](int key) {
+        trigger->setOptionKey(key);
+    });
+    if (browser) browser->show();
+}
 
 // ── Registration ──────────────────────────────────────────────────────
 
