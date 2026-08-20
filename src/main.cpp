@@ -25,16 +25,22 @@ using namespace object_collab::prelude;
 // VHS post-processing shader
 // ---------------------------------------------------------------------------
 
-// Standard cocos2d-x vertex shader (position + color + texture coordinates).
+// Vertex shader.
+// CC_MVPMatrix is NOT declared here — CCGLProgram injects it automatically
+// before your source.  Redeclaring it causes a GLSL compile error.
+// Only the attributes and varyings that Cocos doesn't pre-declare go here.
 static constexpr const char* VHS_VERTEX = R"(
 attribute vec4 a_position;
 attribute vec2 a_texCoord;
 attribute vec4 a_color;
 
-uniform mat4 CC_MVPMatrix;
-
+#ifdef GL_ES
+varying mediump vec2 v_texCoord;
+varying lowp vec4 v_fragmentColor;
+#else
 varying vec2 v_texCoord;
 varying vec4 v_fragmentColor;
+#endif
 
 void main() {
     gl_Position = CC_MVPMatrix * a_position;
@@ -52,10 +58,13 @@ void main() {
 static constexpr const char* VHS_FRAGMENT = R"(
 #ifdef GL_ES
 precision mediump float;
-#endif
 
+varying mediump vec2 v_texCoord;
+varying lowp vec4 v_fragmentColor;
+#else
 varying vec2 v_texCoord;
 varying vec4 v_fragmentColor;
+#endif
 
 uniform sampler2D CC_Texture0;   // ← captured gameplay texture
 
@@ -125,6 +134,8 @@ static cocos2d::CCGLProgram* vhsOverlayProgram() {
         auto* p = new cocos2d::CCGLProgram();
         if (!p->initWithVertexShaderByteArray(VHS_VERTEX, VHS_FRAGMENT)) {
             log::error("VHS: initWithVertexShaderByteArray failed");
+            log::error("VHS vertex shader log:\n{}", p->vertexShaderLog());
+            log::error("VHS fragment shader log:\n{}", p->fragmentShaderLog());
             delete p;
             return nullptr;
         }
@@ -133,6 +144,7 @@ static cocos2d::CCGLProgram* vhsOverlayProgram() {
         p->addAttribute(kCCAttributeNameTexCoord,  kCCVertexAttrib_TexCoords);
         if (!p->link()) {
             log::error("VHS: shader link failed");
+            log::error("VHS program log:\n{}", p->programLog());
             delete p;
             return nullptr;
         }
