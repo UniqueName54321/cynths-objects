@@ -106,7 +106,9 @@ void main() {
                 * (1.0 - smoothstep(0.50, 0.56, roll));
     color = mix(color, vec3(0.88, 0.88, 0.96), track * 0.14 * u_tracking);
 
-    gl_FragColor = vec4(color, 1.0);
+    // ── Honour sprite opacity (v_fragmentColor.a carries setOpacity) ─
+    float alpha = v_fragmentColor.a;
+    gl_FragColor = vec4(color * v_fragmentColor.rgb * alpha, alpha);
 }
 )";
 
@@ -225,8 +227,15 @@ public:
                 }
                 overlay->m_displaySprite = overlay->m_renderTex->getSprite();
                 overlay->m_displaySprite->setShaderProgram(shader);
-                overlay->m_displaySprite->setAnchorPoint({0.0f, 0.0f});
-                overlay->m_displaySprite->setPosition({0.0f, 0.0f});
+
+                // The render-texture's internal sprite already has
+                // scaleY = -1 (to flip the FBO output).  Don't mess
+                // with its anchor/position — position the render-texture
+                // node itself instead.
+                overlay->m_renderTex->setPosition({
+                    winSize.width * 0.5f,
+                    winSize.height * 0.5f
+                });
 
                 // The render texture already owns the sprite as a child;
                 // add the render texture as *our* child.
