@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.5.2
+## v0.5.3
 
 - Fixed the **Browse Options...** button so it opens reliably.
 - Fixed the option list rendering blank when the browser opens.
