@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.5.4
+
+- Fixed option-row clicks only changing browser focus without enabling or
+  saving the selected option, which left triggers on the legacy default key
+  `0` (Platformer Mode).
+- Clicking the first option now replaces the legacy single-option selection;
+  clicking additional rows enables multiple settings on the same trigger.
+
 ## v0.5.3
 
 - Fixed the **Browse Options...** button so it opens reliably.

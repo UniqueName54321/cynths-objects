@@ -409,8 +409,12 @@ static OptionValues decodeOptionValues(std::string_view encoded) {
         if (equals != std::string_view::npos) {
             auto key = utils::numFromString<int>(item.substr(0, equals));
             auto value = utils::numFromString<float>(item.substr(equals + 1));
-            if (key && value && isKnownOption(key.unwrap())) {
-                values[key.unwrap()] = std::clamp(value.unwrap(), 0.0f, 1.0f);
+            if (key && value) {
+                const int parsedKey = std::move(key).unwrap();
+                const float parsedValue = std::move(value).unwrap();
+                if (isKnownOption(parsedKey)) {
+                    values[parsedKey] = std::clamp(parsedValue, 0.0f, 1.0f);
+                }
             }
         }
 
@@ -464,13 +468,18 @@ protected:
     SliderNode* m_valueSlider = nullptr;
     std::map<int, CCLabelBMFont*> m_rowLabels;
     int m_selectedKey = 0;
+    bool m_legacyState = false;
     bool m_updatingControls = false;
 
-    bool init(std::string encoded, std::function<void(const std::string&)> onChanged) {
+    bool init(
+        std::string encoded,
+        bool legacyState,
+        std::function<void(const std::string&)> onChanged) {
         if (!Popup::init(420.0f, 320.0f)) return false;
 
         m_onChanged = std::move(onChanged);
         m_values = decodeOptionValues(encoded);
+        m_legacyState = legacyState;
         if (!m_values.empty()) m_selectedKey = m_values.begin()->first;
         this->setTitle("Browse Options");
 
@@ -495,6 +504,7 @@ protected:
         m_activeToggle = CCMenuItemExt::createTogglerWithStandardSprites(
             0.55f, [this](CCMenuItemToggler* sender) {
                 const bool enabled = !sender->isToggled();
+                m_legacyState = false;
                 if (enabled) {
                     m_values.try_emplace(m_selectedKey, m_valueSlider->getValue());
                 } else {
@@ -508,6 +518,7 @@ protected:
 
         m_valueSlider = SliderNode::create([this](SliderNode*, float value) {
             if (m_updatingControls) return;
+            m_legacyState = false;
             m_values[m_selectedKey] = value;
             if (!m_activeToggle->isToggled()) m_activeToggle->toggle(true);
             this->updateValueLabel();
@@ -531,7 +542,7 @@ protected:
         m_scrollLayer->m_contentLayer->setLayout(ScrollLayer::createDefaultListLayout(1.0f));
         m_mainLayer->addChild(m_scrollLayer);
 
-        this->selectOption(m_selectedKey);
+        this->selectOption(m_selectedKey, false);
         this->rebuildList("");
         return true;
     }
@@ -540,8 +551,18 @@ protected:
         if (m_onChanged) m_onChanged(encodeOptionValues(m_values));
     }
 
-    void selectOption(int key) {
+    void selectOption(int key, bool enable) {
         const int previous = m_selectedKey;
+
+        if (enable) {
+            // An un-migrated trigger still contains the old one-option state.
+            // The first browser choice replaces that legacy selection; later
+            // row clicks add settings to the new multi-option state.
+            if (m_legacyState && key != previous) m_values.clear();
+            m_legacyState = false;
+            m_values.try_emplace(key, 1.0f);
+        }
+
         m_selectedKey = key;
         const auto opt = static_cast<AdvancedOption>(key);
 
@@ -558,6 +579,7 @@ protected:
         this->updateValueLabel();
         this->updateRowLabel(previous);
         this->updateRowLabel(key);
+        if (enable) this->persist();
     }
 
     void updateValueLabel() {
@@ -614,7 +636,7 @@ protected:
 
             auto* button = CCMenuItemExt::createSpriteExtra(row,
                 [this, key = entry.key](CCMenuItemSpriteExtra*) {
-                    this->selectOption(key);
+                    this->selectOption(key, true);
                 });
             auto* menu = CCMenu::create();
             menu->setPosition({0.0f, 0.0f});
@@ -635,9 +657,11 @@ protected:
 public:
     static MultiOptionBrowserPopup* create(
         std::string encoded,
+        bool legacyState,
         std::function<void(const std::string&)> onChanged) {
         auto* popup = new MultiOptionBrowserPopup();
-        if (popup && popup->init(std::move(encoded), std::move(onChanged))) {
+        if (popup && popup->init(
+            std::move(encoded), legacyState, std::move(onChanged))) {
             popup->autorelease();
             return popup;
         }
@@ -1322,7 +1346,9 @@ private:
                         }
                         const std::string initial = current
                             ? current->getOptionsForEditor() : "-";
-                        auto* browser = MultiOptionBrowserPopup::create(initial,
+                        const bool legacyState = current && current->m_options.empty();
+                        auto* browser = MultiOptionBrowserPopup::create(
+                            initial, legacyState,
                             [selectedCopy](const std::string& encoded) {
                                 applyValueToSelected(selectedCopy,
                                     &AdvancedOptionsTrigger::m_options, encoded);
