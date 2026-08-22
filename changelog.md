@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.6.0
+
+- Added the **Combination Orb**, which activates up to seven selected orbs in
+  order and supports a configurable delay between activations.
+  - Includes all vanilla orbs.
+  - Discovers orbs registered by this mod and other Object Collab mods.
+  - Stores custom choices by stable Object Collab ID for cross-mod safety.
+- Added the **Gamemode Orb**, which switches the activating player to the
+  selected vanilla gamemode.
+  - Discovers custom gamemode portals registered by other Object Collab mods.
+- Both new orb configuration menus use **Edit Special**.
+
 ## v0.5.4
 
 - Fixed option-row clicks only changing browser focus without enabling or

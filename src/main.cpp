@@ -3,16 +3,17 @@
 // Built on top of Object Collab (smjs.object-collab), which provides the
 // custom-object framework and cross-mod compatibility layer.
 //
-// The "Advanced Options Trigger" lets level makers change any level or
-// player setting on the fly. Each trigger instance can change multiple
-// settings when activated. 172 options are available across 6 categories.
-// Edit Object provides a searchable browser for enabling and configuring them.
+// Includes the Advanced Options Trigger plus Combination and Gamemode orbs.
+// Trigger configuration lives in Edit Object; orb configuration follows
+// vanilla behavior and lives in Edit Special.
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdio>
 #include <functional>
 #include <map>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -1364,6 +1365,349 @@ private:
     }
 };
 
+// ---------------------------------------------------------------------------
+// Shared orb registry helpers
+// ---------------------------------------------------------------------------
+
+namespace {
+    struct VanillaObjectChoice {
+        const char* name;
+        int objectID;
+        GameObjectType type;
+    };
+
+    constexpr std::array<VanillaObjectChoice, 10> VANILLA_ORBS {{
+        {"Yellow Orb",       36,   GameObjectType::YellowJumpRing},
+        {"Blue Orb",         84,   GameObjectType::GravityRing},
+        {"Pink Orb",         141,  GameObjectType::PinkJumpRing},
+        {"Green Orb",        1022, GameObjectType::GreenRing},
+        {"Red Orb",          1330, GameObjectType::RedJumpRing},
+        {"Black Orb",        1333, GameObjectType::DropRing},
+        {"Dash Orb",         1704, GameObjectType::DashRing},
+        {"Gravity Dash Orb", 1751, GameObjectType::GravityDashRing},
+        {"Spider Orb",       3004, GameObjectType::SpiderOrb},
+        {"Teleport Orb",     3027, GameObjectType::TeleportOrb},
+    }};
+
+    constexpr std::array<VanillaObjectChoice, 8> VANILLA_GAMEMODES {{
+        {"Cube",   12,   GameObjectType::CubePortal},
+        {"Ship",   13,   GameObjectType::ShipPortal},
+        {"Ball",   47,   GameObjectType::BallPortal},
+        {"UFO",    111,  GameObjectType::UfoPortal},
+        {"Wave",   660,  GameObjectType::WavePortal},
+        {"Robot",  745,  GameObjectType::RobotPortal},
+        {"Spider", 1331, GameObjectType::SpiderPortal},
+        {"Swing",  1933, GameObjectType::SwingPortal},
+    }};
+
+    bool isOrbType(GameObjectType type) {
+        switch (type) {
+            case GameObjectType::YellowJumpRing:
+            case GameObjectType::PinkJumpRing:
+            case GameObjectType::GravityRing:
+            case GameObjectType::GreenRing:
+            case GameObjectType::RedJumpRing:
+            case GameObjectType::DropRing:
+            case GameObjectType::CustomRing:
+            case GameObjectType::DashRing:
+            case GameObjectType::GravityDashRing:
+            case GameObjectType::SpiderOrb:
+            case GameObjectType::TeleportOrb:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    bool isGamemodePortalType(GameObjectType type) {
+        switch (type) {
+            case GameObjectType::CubePortal:
+            case GameObjectType::ShipPortal:
+            case GameObjectType::BallPortal:
+            case GameObjectType::UfoPortal:
+            case GameObjectType::WavePortal:
+            case GameObjectType::RobotPortal:
+            case GameObjectType::SpiderPortal:
+            case GameObjectType::SwingPortal:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    std::optional<GameObjectType> registeredObjectType(uint32_t numericID, const ObjectInfo& info) {
+        if (const auto* quick = std::get_if<QuickObject>(&info.getConstruction())) {
+            return quick->getObjectType();
+        }
+        if (auto* object = GameObject::createWithKey(static_cast<int>(numericID))) {
+            return object->getType();
+        }
+        return std::nullopt;
+    }
+
+    std::string friendlyObjectName(std::string_view id) {
+        const size_t slash = id.find_last_of('/');
+        std::string name(id.substr(slash == std::string_view::npos ? 0 : slash + 1));
+        bool capitalize = true;
+        for (char& c : name) {
+            if (c == '-' || c == '_') {
+                c = ' ';
+                capitalize = true;
+            } else if (capitalize) {
+                c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+                capitalize = false;
+            }
+        }
+        return name;
+    }
+
+    EnumMenu::EnumAliasList orbChoices() {
+        EnumMenu::EnumAliasList choices;
+        choices.emplace_back("None", "");
+        for (const auto& orb : VANILLA_ORBS) {
+            choices.emplace_back(orb.name, fmt::format("v:{}", orb.objectID));
+        }
+        for (const auto& [numericID, info] : ObjectAPI::getRegister()) {
+            const std::string id(info.getID());
+            if (id == "cynth.objects/combination-orb") continue;
+            if (auto type = registeredObjectType(numericID, info); type && isOrbType(*type)) {
+                choices.emplace_back(friendlyObjectName(id), "c:" + id);
+            }
+        }
+        return choices;
+    }
+
+    EnumMenu::EnumAliasList gamemodeChoices() {
+        EnumMenu::EnumAliasList choices;
+        for (const auto& mode : VANILLA_GAMEMODES) {
+            choices.emplace_back(mode.name, fmt::format("v:{}", mode.objectID));
+        }
+        for (const auto& [numericID, info] : ObjectAPI::getRegister()) {
+            if (auto type = registeredObjectType(numericID, info); type && isGamemodePortalType(*type)) {
+                const std::string id(info.getID());
+                choices.emplace_back(friendlyObjectName(id), "c:" + id);
+            }
+        }
+        return choices;
+    }
+
+    std::string choiceName(const EnumMenu::EnumAliasList& choices, const std::string& value) {
+        for (const auto& choice : choices) {
+            if (choice.value == value) return choice.display;
+        }
+        return value.empty() ? "None" : friendlyObjectName(value);
+    }
+
+    std::optional<int> resolveObjectChoice(std::string_view value) {
+        if (value.starts_with("v:")) {
+            auto number = geode::utils::numFromString<int>(value.substr(2));
+            if (number) return std::move(number).unwrap();
+            return std::nullopt;
+        }
+        if (value.starts_with("c:")) {
+            if (auto id = ObjectAPI::getCustomObjectNumericID(value.substr(2))) {
+                return static_cast<int>(*id);
+            }
+        }
+        return std::nullopt;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Combination Orb
+// ---------------------------------------------------------------------------
+
+class $object(CombinationOrb, EnhancedGameObject) {
+public:
+    static constexpr size_t KEY_ORBS = 153;
+    static constexpr size_t KEY_DELAY = 154;
+
+    std::string m_orbs;
+    float m_delay = 0.0f;
+
+    static CombinationOrb* create(ObjectInfo* info) { return new CombinationOrb(info); }
+
+    CombinationOrb(ObjectInfo* info)
+        : CustomObject(info, ObjectTraits::builder()
+            .gameObjectType(GameObjectType::CustomRing)
+            .build()) {}
+
+    static std::array<std::string, 7> decodeSlots(std::string_view encoded) {
+        std::array<std::string, 7> slots;
+        size_t start = 0;
+        for (size_t i = 0; i < slots.size() && start <= encoded.size(); ++i) {
+            const size_t end = encoded.find('|', start);
+            slots[i] = std::string(encoded.substr(start,
+                end == std::string_view::npos ? encoded.size() - start : end - start));
+            if (end == std::string_view::npos) break;
+            start = end + 1;
+        }
+        return slots;
+    }
+
+    static std::string encodeSlots(const std::array<std::string, 7>& slots) {
+        std::string encoded;
+        for (size_t i = 0; i < slots.size(); ++i) {
+            if (i) encoded.push_back('|');
+            encoded += slots[i];
+        }
+        return encoded;
+    }
+
+    void activatedByPlayer(PlayerObject* player) override {
+        const auto slots = decodeSlots(m_orbs);
+        std::vector<std::string> active;
+        for (const auto& slot : slots) if (!slot.empty()) active.push_back(slot);
+
+        auto activate = [position = this->getPosition()](const std::string& choice, PlayerObject* target) {
+            if (auto numericID = resolveObjectChoice(choice)) {
+                if (auto* proxy = GameObject::createWithKey(*numericID)) {
+                    proxy->setPosition(position);
+                    proxy->activatedByPlayer(target);
+                }
+            }
+        };
+
+        if (!active.empty() && m_delay <= 0.0f) {
+            for (const auto& choice : active) activate(choice, player);
+        } else if (!active.empty()) {
+            auto* actions = CCArray::create();
+            for (size_t i = 0; i < active.size(); ++i) {
+                if (i) actions->addObject(CCDelayTime::create(std::max(0.0f, m_delay)));
+                const std::string choice = active[i];
+                actions->addObject(CallFuncExt::create([activate, choice, player] {
+                    auto* layer = PlayLayer::get();
+                    if (layer && (layer->m_player1 == player || layer->m_player2 == player)) {
+                        activate(choice, player);
+                    }
+                }));
+            }
+            if (auto* layer = PlayLayer::get()) layer->runAction(CCSequence::create(actions));
+        }
+        CustomObject::activatedByPlayer(player);
+    }
+
+    static PopupOptions getEditSpecialConfig(const Selected& selected) {
+        std::vector<std::unique_ptr<ValueMenu>> menus;
+
+        for (size_t slot = 0; slot < 7; ++slot) {
+            menus.push_back(EnumMenu::builder()
+                .id(fmt::format("orb-{}", slot + 1))
+                .title(fmt::format("Orb {}", slot + 1))
+                .values(orbChoices())
+                .onValue([slot](const std::string& value, const Selected& objects, Popup*) {
+                    for (auto* object : objects) if (auto* orb = dynamic_cast<CombinationOrb*>(object)) {
+                        auto slots = decodeSlots(orb->m_orbs);
+                        slots[slot] = value;
+                        orb->m_orbs = encodeSlots(slots);
+                    }
+                })
+                .currentValue([slot](const Selected& objects, Popup*) {
+                    for (auto* object : objects) if (auto* orb = dynamic_cast<CombinationOrb*>(object)) {
+                        return choiceName(orbChoices(), decodeSlots(orb->m_orbs)[slot]);
+                    }
+                    return std::string("None");
+                }).build());
+        }
+        menus.push_back(NumericMenu::builder()
+            .id("delay").title("Delay (seconds)")
+            .inputType(NumericMenu::InputType::Arrows).min(0).max(60).precision(3).stepSize(0.05)
+            .onValue([](float value, const Selected& objects, Popup*) {
+                applyValueToSelected(objects, &CombinationOrb::m_delay, value);
+            })
+            .currentValue([](const Selected& objects, Popup*) {
+                return getCommonValueOrDefault(objects, &CombinationOrb::m_delay);
+            }).build());
+
+        return PopupConfig::builder()
+            .width(390).height(285).gapY(8).title("Combination Orb")
+            .info(InfoPopup::builder().title("Combination Orb")
+                .description("Activates up to seven chosen orbs in order. Delay is the time between each orb. Custom Object Collab orbs are stored by stable ID.")
+                .build())
+            .menus(std::move(menus)).build();
+    }
+
+    std::vector<std::string> getObjectDetails() override {
+        std::vector<std::string> details {fmt::format("Delay: {:.3f}s", m_delay)};
+        auto choices = orbChoices();
+        for (const auto& slot : decodeSlots(m_orbs)) if (!slot.empty()) details.push_back(choiceName(choices, slot));
+        return details;
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Gamemode Orb
+// ---------------------------------------------------------------------------
+
+class $object(GamemodeOrb, EnhancedGameObject) {
+public:
+    static constexpr size_t KEY_GAMEMODE = 155;
+    std::string m_gamemode = "v:12";
+
+    static GamemodeOrb* create(ObjectInfo* info) { return new GamemodeOrb(info); }
+    GamemodeOrb(ObjectInfo* info)
+        : CustomObject(info, ObjectTraits::builder().gameObjectType(GameObjectType::CustomRing).build()) {}
+
+    static void disableCurrentMode(PlayerObject* player) {
+        switch (player->getActiveMode()) {
+            case GameObjectType::ShipPortal:   player->toggleFlyMode(false, false); break;
+            case GameObjectType::BallPortal:   player->toggleRollMode(false, false); break;
+            case GameObjectType::UfoPortal:    player->toggleBirdMode(false, false); break;
+            case GameObjectType::WavePortal:   player->toggleDartMode(false, false); break;
+            case GameObjectType::RobotPortal:  player->toggleRobotMode(false, false); break;
+            case GameObjectType::SpiderPortal: player->toggleSpiderMode(false, false); break;
+            case GameObjectType::SwingPortal:  player->toggleSwingMode(false, false); break;
+            default: break;
+        }
+    }
+
+    void activatedByPlayer(PlayerObject* player) override {
+        if (m_gamemode.starts_with("c:")) {
+            if (auto numericID = resolveObjectChoice(m_gamemode)) {
+                if (auto* proxy = GameObject::createWithKey(*numericID)) {
+                    proxy->setPosition(this->getPosition());
+                    if (auto* custom = dynamic_cast<CustomObjectInterface*>(proxy)) {
+                        custom->collidedByPlayer(player);
+                    }
+                }
+            }
+        } else if (auto numericID = resolveObjectChoice(m_gamemode)) {
+            disableCurrentMode(player);
+            switch (*numericID) {
+                case 13:   player->toggleFlyMode(true, false); break;
+                case 47:   player->toggleRollMode(true, false); break;
+                case 111:  player->toggleBirdMode(true, false); break;
+                case 660:  player->toggleDartMode(true, false); break;
+                case 745:  player->toggleRobotMode(true, false); break;
+                case 1331: player->toggleSpiderMode(true, false); break;
+                case 1933: player->toggleSwingMode(true, false); break;
+                default: break;
+            }
+        }
+        CustomObject::activatedByPlayer(player);
+    }
+
+    static PopupOptions getEditSpecialConfig(const Selected& selected) {
+        return PopupConfig::builder().width(360).height(180).title("Gamemode Orb")
+            .info(InfoPopup::builder().title("Gamemode Orb")
+                .description("Switches the activating player to a vanilla gamemode or a gamemode portal registered by another Object Collab mod.")
+                .build())
+            .menu(EnumMenu::builder().id("gamemode").title("Gamemode")
+                .values(gamemodeChoices())
+                .onValue([](const std::string& value, const Selected& objects, Popup*) {
+                    applyValueToSelected(objects, &GamemodeOrb::m_gamemode, value);
+                })
+                .currentValue([](const Selected& objects, Popup*) {
+                    const auto value = getCommonValueOrDefault(objects, &GamemodeOrb::m_gamemode);
+                    return choiceName(gamemodeChoices(), value);
+                }).build()).build();
+    }
+
+    std::vector<std::string> getObjectDetails() override {
+        return {fmt::format("Gamemode: {}", choiceName(gamemodeChoices(), m_gamemode))};
+    }
+};
+
 // ── Registration ──────────────────────────────────────────────────────
 
 $on_mod(Loaded) {
@@ -1382,4 +1726,23 @@ $on_mod(Loaded) {
             .build())
         .editObject(AdvancedOptionsTrigger::getEditObjectConfig)
         .build());
+
+    ObjectAPI::registerObject(ObjectInfo::builder()
+        .id("combination-orb"_spr).sprite("combination-orb.png"_spr)
+        .editorTab(EditorTab::PlayerModifiers).editorButtonColor(EditorButtonColor::Aqua)
+        .construction(ComplexObject::builder().factory(CombinationOrb::create)
+            .customProperties({
+                PropertyInterface::from(CombinationOrb::KEY_ORBS, &CombinationOrb::m_orbs, ""),
+                PropertyInterface::from(CombinationOrb::KEY_DELAY, &CombinationOrb::m_delay, 0.0f),
+            }).build())
+        .editSpecial(CombinationOrb::getEditSpecialConfig).build());
+
+    ObjectAPI::registerObject(ObjectInfo::builder()
+        .id("gamemode-orb"_spr).sprite("gamemode-orb.png"_spr)
+        .editorTab(EditorTab::PlayerModifiers).editorButtonColor(EditorButtonColor::Pink)
+        .construction(ComplexObject::builder().factory(GamemodeOrb::create)
+            .customProperties({
+                PropertyInterface::from(GamemodeOrb::KEY_GAMEMODE, &GamemodeOrb::m_gamemode, "v:12"),
+            }).build())
+        .editSpecial(GamemodeOrb::getEditSpecialConfig).build());
 }
