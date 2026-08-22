@@ -1584,7 +1584,9 @@ public:
             }
             if (auto* layer = PlayLayer::get()) layer->runAction(CCSequence::create(actions));
         }
-        CustomObject::activatedByPlayer(player);
+        // Do not call EnhancedGameObject::activatedByPlayer here. CustomRing's
+        // vanilla implementation is the reverse-orb action; this object has
+        // already dispatched all of its configured orb activations above.
     }
 
     static PopupOptions getEditSpecialConfig(const Selected& selected) {
@@ -1639,14 +1641,20 @@ public:
 // Gamemode Orb
 // ---------------------------------------------------------------------------
 
-class $object(GamemodeOrb, EnhancedGameObject) {
+class $object(GamemodeOrb, EffectGameObject) {
 public:
     static constexpr size_t KEY_GAMEMODE = 155;
+    static constexpr size_t KEY_FREE_CAMERA = 156;
     std::string m_gamemode = "v:12";
+    bool m_freeCamera = false;
 
     static GamemodeOrb* create(ObjectInfo* info) { return new GamemodeOrb(info); }
     GamemodeOrb(ObjectInfo* info)
         : CustomObject(info, ObjectTraits::builder().gameObjectType(GameObjectType::CustomRing).build()) {}
+
+    static bool supportsFreeCamera(int portalID) {
+        return portalID == 13 || portalID == 111 || portalID == 660 || portalID == 1933;
+    }
 
     static void disableCurrentMode(PlayerObject* player) {
         switch (player->getActiveMode()) {
@@ -1666,25 +1674,35 @@ public:
             if (auto numericID = resolveObjectChoice(m_gamemode)) {
                 if (auto* proxy = GameObject::createWithKey(*numericID)) {
                     proxy->setPosition(this->getPosition());
+                    if (auto* portal = dynamic_cast<EffectGameObject*>(proxy)) {
+                        portal->m_cameraIsFreeMode = m_freeCamera;
+                    }
                     if (auto* custom = dynamic_cast<CustomObjectInterface*>(proxy)) {
                         custom->collidedByPlayer(player);
                     }
                 }
             }
         } else if (auto numericID = resolveObjectChoice(m_gamemode)) {
-            disableCurrentMode(player);
-            switch (*numericID) {
-                case 13:   player->toggleFlyMode(true, false); break;
-                case 47:   player->toggleRollMode(true, false); break;
-                case 111:  player->toggleBirdMode(true, false); break;
-                case 660:  player->toggleDartMode(true, false); break;
-                case 745:  player->toggleRobotMode(true, false); break;
-                case 1331: player->toggleSpiderMode(true, false); break;
-                case 1933: player->toggleSwingMode(true, false); break;
-                default: break;
+            auto* layer = GJBaseGameLayer::get();
+            this->m_cameraIsFreeMode = supportsFreeCamera(*numericID) && m_freeCamera;
+            if (layer && *numericID != 12) {
+                layer->playerWillSwitchMode(player, this);
+                switch (*numericID) {
+                    case 13:   layer->switchToFlyMode(player, this, false, static_cast<int>(GameObjectType::ShipPortal)); break;
+                    case 47:   layer->switchToRollMode(player, this, false); break;
+                    case 111:  layer->switchToFlyMode(player, this, false, static_cast<int>(GameObjectType::UfoPortal)); break;
+                    case 660:  layer->switchToFlyMode(player, this, false, static_cast<int>(GameObjectType::WavePortal)); break;
+                    case 745:  layer->switchToRobotMode(player, this, false); break;
+                    case 1331: layer->switchToSpiderMode(player, this, false); break;
+                    case 1933: layer->switchToFlyMode(player, this, false, static_cast<int>(GameObjectType::SwingPortal)); break;
+                    default: break;
+                }
+            } else {
+                disableCurrentMode(player);
             }
         }
-        CustomObject::activatedByPlayer(player);
+        // As with Combination Orb, falling through to CustomRing's inherited
+        // activation would additionally perform the reverse-orb action.
     }
 
     static PopupOptions getEditSpecialConfig(const Selected& selected) {
@@ -1700,11 +1718,21 @@ public:
                 .currentValue([](const Selected& objects, Popup*) {
                     const auto value = getCommonValueOrDefault(objects, &GamemodeOrb::m_gamemode);
                     return choiceName(gamemodeChoices(), value);
+                }).build())
+            .menu(ToggleMenu::builder().id("free-camera").title("Free Camera")
+                .onValue([](bool value, const Selected& objects, Popup*) {
+                    applyValueToSelected(objects, &GamemodeOrb::m_freeCamera, value);
+                })
+                .currentValue([](const Selected& objects, Popup*) {
+                    return getCommonValueOrDefault(objects, &GamemodeOrb::m_freeCamera);
                 }).build()).build();
     }
 
     std::vector<std::string> getObjectDetails() override {
-        return {fmt::format("Gamemode: {}", choiceName(gamemodeChoices(), m_gamemode))};
+        return {
+            fmt::format("Gamemode: {}", choiceName(gamemodeChoices(), m_gamemode)),
+            fmt::format("Free Camera: {}", m_freeCamera ? "Yes" : "No")
+        };
     }
 };
 
@@ -1743,6 +1771,7 @@ $on_mod(Loaded) {
         .construction(ComplexObject::builder().factory(GamemodeOrb::create)
             .customProperties({
                 PropertyInterface::from(GamemodeOrb::KEY_GAMEMODE, &GamemodeOrb::m_gamemode, "v:12"),
+                PropertyInterface::from(GamemodeOrb::KEY_FREE_CAMERA, &GamemodeOrb::m_freeCamera, false),
             }).build())
         .editSpecial(GamemodeOrb::getEditSpecialConfig).build());
 }

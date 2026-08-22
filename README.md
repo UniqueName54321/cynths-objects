@@ -10,7 +10,7 @@ objects to the editor, built on top of
 |-------------------------|---------|-------------|
 | Advanced Options Trigger | Trigger | Changes one or more level/player settings at once. Includes 172 options across 6 categories and a searchable browser in Edit Object. |
 | Combination Orb | Orb | Activates up to seven selected vanilla or Object Collab orbs in order, with a configurable delay between them. |
-| Gamemode Orb | Orb | Switches the activating player to a selected vanilla or Object Collab gamemode. |
+| Gamemode Orb | Orb | Switches the activating player to a selected vanilla or Object Collab gamemode, with optional free-camera behavior for compatible modes. In bounded mode, borders are anchored to the orb's block Y position. |
 
 Both orb objects are configured through **Edit Special**, like vanilla orbs.
 
@@ -87,12 +87,12 @@ push (Windows, macOS, iOS, Android32, Android64) using the official
 [`geode-sdk/build-geode-mod`](https://github.com/geode-sdk/build-geode-mod)
 action and uploads the combined `.geode` as a build artifact.
 
-Pushing a `v*` tag (e.g. `v0.6.1`) also creates a **GitHub Release** with the
+Pushing a `v*` tag (e.g. `v0.6.2`) also creates a **GitHub Release** with the
 combined `.geode` attached:
 
 ```sh
-git tag v0.6.1
-git push origin v0.6.1
+git tag v0.6.2
+git push origin v0.6.2
 ```
 
 > ⚠️ GitHub Actions is **disabled by default** on forks and may need to be

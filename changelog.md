@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.6.2
+
+- Fixed Combination Orb and Gamemode Orb also performing the vanilla reverse
+  orb action after their custom activation.
+- Added a **Free Camera** option to Gamemode Orb for gamemodes that support it.
+- When Free Camera is disabled, bounded gamemode borders now use the block Y
+  position of the Gamemode Orb, matching vanilla configurable portals.
+- Propagated the Free Camera setting to compatible gamemode portals registered
+  by other Object Collab mods.
+
 ## v0.6.1
 
 - Replaced the Advanced Options, Combination Orb, and Gamemode Orb artwork
