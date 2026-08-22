@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.6.1
+
+- Replaced the Advanced Options, Combination Orb, and Gamemode Orb artwork
+  with minimal, single-color icons that better match Geometry Dash's visual
+  style and remain distinct at editor-button size.
+- Added a deterministic Pillow script for regenerating the three icons.
+
 ## v0.6.0
 
 - Added the **Combination Orb**, which activates up to seven selected orbs in

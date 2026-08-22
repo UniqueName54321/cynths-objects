@@ -87,12 +87,12 @@ push (Windows, macOS, iOS, Android32, Android64) using the official
 [`geode-sdk/build-geode-mod`](https://github.com/geode-sdk/build-geode-mod)
 action and uploads the combined `.geode` as a build artifact.
 
-Pushing a `v*` tag (e.g. `v0.6.0`) also creates a **GitHub Release** with the
+Pushing a `v*` tag (e.g. `v0.6.1`) also creates a **GitHub Release** with the
 combined `.geode` attached:
 
 ```sh
-git tag v0.6.0
-git push origin v0.6.0
+git tag v0.6.1
+git push origin v0.6.1
 ```
 
 > ⚠️ GitHub Actions is **disabled by default** on forks and may need to be
